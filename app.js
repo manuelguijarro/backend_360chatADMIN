@@ -17,7 +17,7 @@ try {
 const app = express();
 const PORT = 3000; // Puerto en el que se ejecutará el servidor
 
-// Función para borrar mensajes antiguos
+// Función para borrar mensajes antiguos y actualizar los chatrooms
 const deleteOldMessages = async () => {
   const database = firebaseAdmin.firestore();
   const chatroomsRef = database.collection('chatrooms');
@@ -55,19 +55,31 @@ const deleteOldMessages = async () => {
           console.error(`Timestamp no válido para el mensaje ID: ${chatDoc.id} en el chatroom: ${chatroomDoc.id}`);
         }
       }
+
+      // Comprobar y actualizar el campo "ultimoMensajeTimestamp" en el documento del chatroom
+      const chatroomData = chatroomDoc.data();
+      const ultimoMensajeTimestamp = chatroomData.ultimoMensajeTimestamp;
+
+      if (ultimoMensajeTimestamp && ultimoMensajeTimestamp.toDate) {
+        if (ultimoMensajeTimestamp.toDate().getTime() <= thresholdTimestamp.toDate().getTime()) {
+          await chatroomDoc.ref.update({
+            ultimoMensaje: firebaseAdmin.firestore.FieldValue.delete()
+          });
+          console.log(`Campo "ultimoMensaje" eliminado en el chatroom: ${chatroomDoc.id}`);
+        } else {
+          console.log(`Campo "ultimoMensaje" no eliminado en el chatroom: ${chatroomDoc.id}`);
+        }
+      } else {
+        console.error(`Campo "ultimoMensajeTimestamp" no válido o no existente en el chatroom: ${chatroomDoc.id}`);
+      }
     }
   } catch (error) {
-    console.error('Error al borrar mensajes antiguos:', error);
+    console.error('Error al borrar mensajes antiguos y actualizar chatrooms:', error);
   }
 };
 
-// Lógica para hacer peticiones a la base de datos de Firebase cada 10 segundos
-setInterval(deleteOldMessages, 10000); // 10000 milisegundos = 10 segundos
-
-// Definir rutas y controladores de Express.js según necesidades
-app.get('/', (req, res) => {
-  res.send('¡Hola mundo desde Express.js!');
-});
+// Lógica para hacer peticiones a la base de datos de Firebase cada 30 segundos
+setInterval(deleteOldMessages, 30000); // 30000 milisegundos = 30 segundos
 
 // Iniciar el servidor
 app.listen(PORT, () => {
